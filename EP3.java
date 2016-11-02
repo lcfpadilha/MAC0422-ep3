@@ -10,6 +10,7 @@ public class EP3 {
    static LinkedList<Process> finished_process; //processos que estão em execução
    static LinkedList<Page> next_pages; //próximas páginas a serem acessadas
    static int alg_space, alg_pages;
+   static double interval;
 
    public static void set_traceFile (String f_name) {
       int virtual_size, real_size, allocUnit_size, page_size;
@@ -27,7 +28,7 @@ public class EP3 {
          finished_process = new LinkedList<Process>();
 
          // Leitura da primeira linha
-         real_size      = s.nextInt();
+         real_size      = s.nextInt(); //TODO: Colocar global?
          virtual_size   = s.nextInt();
          allocUnit_size = s.nextInt();
          page_size      = s.nextInt();
@@ -37,7 +38,7 @@ public class EP3 {
          virtual_memory_bm.clear();
 
          // Tabela de páginas (vsize / page_size linhas por 3 colunas)
-         table_pages = new int[virtual_size / page_size][3];
+         table_pages = new int[virtual_size / page_size][3]; //TODO: Verificar oque precisa na tabela de pagina
 
          // Inicialização do bitmap da memoria real
          virtual_memory_bm = new BitSet(real_size / allocUnit_size);
@@ -71,8 +72,9 @@ public class EP3 {
       }
    } 
 
-   public static init_simulator () {
-      
+   public static void init_simulator () {
+      //Enquanto houver paginas/processos nas listas
+      //Se um processo tem o tempo para 
    }
 
    public static void execute_command (String[] s) {
@@ -87,10 +89,16 @@ public class EP3 {
       else if (s[0].equals("substitui")) 
          alg_pages = Integer.parseInt(s[1]);
          //sim.set_pageManagement(s[1]);
+      //Intervalo de tempo
+      else if (s[0].equals("intevalo"))
+         interval = Double.parseDouble(s[1]);
       //Inicia simulador
       else if (s[0].equals("executa"))
          init_simulator();
          //sim.init();
+      else {
+         System.out.println ("Comando INVÁLIDO!");
+      }
    }
 
    public static void main (String[] args) {
