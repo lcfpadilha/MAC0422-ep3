@@ -3,18 +3,20 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 public class EP3 {
-   static BitSet virtual_memory_bm; //bitmap da memoria virtual (usado para alocaçao)
-   static BitSet real_memory_bm; //bitmap da memoria real (usado para alocaçao)
+   static BitSet virtual_memory_bm;             //bitmap da memoria virtual (usado para alocaçao)
+   static BitSet real_memory_bm;                //bitmap da memoria real (usado para alocaçao)
    static int[][] table_pages;
-   static LinkedList<Process> next_process; //processos que serão executados
+   static LinkedList<Process> next_process;     //processos que serão executados
    static LinkedList<Process> finished_process; //processos que estão em execução
-   static LinkedList<Page> next_pages; //próximas páginas a serem acessadas
+   static LinkedList<Page> next_pages;          //próximas páginas a serem acessadas
    static int alg_space, alg_pages;
    static double interval;
+   static int virtual_size, real_size, allocUnit_size, page_size;
+   static int last_Index;
 
    public static void set_traceFile (String f_name) {
-      int virtual_size, real_size, allocUnit_size, page_size;
-      
+      int k = 0;
+
       // Leitura do arquivo com nome f_name
       try {
          File file   = new File(f_name);
@@ -38,11 +40,11 @@ public class EP3 {
          virtual_memory_bm.clear();
 
          // Tabela de páginas (vsize / page_size linhas por 3 colunas)
-         table_pages = new int[virtual_size / page_size][3]; //TODO: Verificar oque precisa na tabela de pagina
+         table_pages = new int[virtual_size / page_size][4];
 
          // Inicialização do bitmap da memoria real
-         virtual_memory_bm = new BitSet(real_size / allocUnit_size);
-         virtual_memory_bm.clear();
+         real_memory_bm = new BitSet(virtual_size / page_size);
+         real_memory_bm.clear();
 
          // Enquanto houver processos no arquivo de trace
          while (in.hasNextLine()) {
@@ -65,13 +67,179 @@ public class EP3 {
                p_pages.add(new Page(p, t));
             }
             // Adicionamos o processo a lista ligada de processos prontos
-            next_process.add(new Process(t0, name, tf, b, p_pages));
+            next_process.add(new Process(k++, t0, name, tf, b, p_pages));
          }
+         // Setando tabela de páginas
+         for (int i = 0; i < virtual_size / page_size; i++)
+            table_pages[i][0] = -1;
+
       // Se houve erro
       } catch (FileNotFoundException fnfe) {
         System.out.println("ERRO:" + fnfe);
       }
    } 
+
+   public static void print_virtualPage () {
+      System.out.println ("ESTADO DA MEMORIA VIRTUAL:");
+      for (int i = 0; i < table_pages.length; i++) {
+         System.out.print (table_pages[i][0] + " ");
+      }
+      System.out.println ();
+   }
+
+   public static int alloc_memory (Process proc) {
+      int i, alloc_size, max_units, k, pages, page_ini = 0, page_end = 0;
+      max_units = virtual_memory_bm.size();
+      alloc_size = (int) Math.ceil( (double) proc.b/allocUnit_size); 
+      k = max_units - alloc_size;
+
+      // Alocando por First Fit
+      if (alg_space == 1) {
+
+         for (i = 0; i < max_units - alloc_size; i++) {
+            if (!virtual_memory_bm.get(i)) {
+               k = i + 1;
+               while (k - i < alloc_size && !virtual_memory_bm.get(k))
+                  k++;
+               if (k - i == alloc_size) break;
+               else k = max_units - alloc_size;
+            }
+         }
+         // Garantido que existe k e i
+         for (int j = i; j < k; j++) 
+            virtual_memory_bm.set(j);
+
+         // Habilitando tabela de páginas
+         page_ini = i * allocUnit_size / page_size;
+         page_end = k * allocUnit_size / page_size;
+         for (int j = page_ini; j < page_end; j++) {
+            table_pages[j][0] = proc.pid;
+            table_pages[j][2] = 0;
+            table_pages[j][3] = 0;
+         }
+      }
+      // Alocando por Next Fit
+      else if (alg_space == 2) {
+
+         for (i = last_Index; i - last_Index < max_units; i++) {
+            if (!virtual_memory_bm.get(i)) {
+               k = i + 1;
+               while (k - i < alloc_size && k < max_units && !virtual_memory_bm.get(k))
+                  k++;
+               if (k - i == alloc_size) break;
+            }
+         }
+
+         // Existem k e i
+         for (int j = i; j < k; j++)
+            virtual_memory_bm.set(j);
+
+         // Habilitando tabela de paginas
+         page_ini = i * allocUnit_size / page_size;
+         page_end = k * allocUnit_size / page_size;
+         for (int j = page_ini; j < page_end; j++) {
+            table_pages[j][0] = proc.pid;
+            table_pages[j][2] = 0;
+            table_pages[j][3] = 0;
+         }
+
+         // Guardamos o ultimo indice acessado 
+         last_Index = k;
+      }
+      // Alocando por Best Fit
+      else if (alg_space == 3) {
+         int min_free = 0, ini = 0;
+
+         for (i = 0; i < max_units; i++) {
+            if (!virtual_memory_bm.get(i)) {
+               int free = 0;
+               k = i + 1;
+               while (k < max_units && !virtual_memory_bm.get(k)) {
+                  free++; k++;
+               }
+               
+               if (min_free == 0) min_free = free;
+
+               if (min_free >= free && free >= alloc_size) {
+                  min_free = free;
+                  ini = i;
+                  i = k;
+               }
+            }
+         }
+
+         // Existem k e i
+         for (int j = ini; j - ini < alloc_size; j++)
+            virtual_memory_bm.set(j);
+
+         // Habilitando tabela de pagina
+         page_ini = ini * allocUnit_size / page_size;
+         pages = alloc_size * allocUnit_size / page_size;
+
+         for (int j = page_ini; j - page_ini < pages; j++) {
+            table_pages[j][0] = proc.pid;
+            table_pages[j][2] = 0;
+            table_pages[j][3] = 0;
+         }
+      }
+      // Alocando por Worst Fit
+      else {
+         int max_free = 0, ini = 0;
+
+         for (i = 0; i < max_units; i++) {
+            if (!virtual_memory_bm.get(i)) {
+               int free = 0;
+               k = i + 1;
+               while (k < max_units && !virtual_memory_bm.get(k)) {
+                  free++; k++;
+               }
+               if (max_free < free && free >= alloc_size) {
+                  max_free = free;
+                  ini = i;
+                  i = k;
+               }
+            }
+         }
+
+         // Existem k e i
+         for (int j = ini; j - ini < alloc_size; j++)
+            virtual_memory_bm.set(j);
+
+         // Habilitando tabela de paginas
+         page_ini = ini * allocUnit_size / page_size;
+         pages = alloc_size * allocUnit_size / page_size;
+
+         for (int j = page_ini; j - page_ini < pages; j++) {
+            table_pages[j][0] = proc.pid;
+            table_pages[j][2] = 0;
+            table_pages[j][3] = 0;
+         }
+      }
+
+      print_virtualPage();
+
+      return page_ini;
+   }
+
+   public static void page_fault (Page p) {
+
+      // Optimal
+      if (alg_pages == 1) {
+
+      }
+      // Second-Chance
+      else if (alg_pages == 2) {
+
+      }
+      // Clock
+      else if (alg_pages == 3) {
+
+      }
+      // LRU
+      else if (alg_pages == 4) {
+
+      }
+   }
 
    public static int[] select_event (int tmin) {
       int[] event = new int[2];
@@ -104,6 +272,10 @@ public class EP3 {
 
    public static void init_simulator () {
       int time = 0;
+      System.out.println ("[Processo]\t[PID]");
+
+      for (int i = 0; i < next_process.size(); i++)
+         System.out.println ("[" + next_process.get(i).name + "]\t[" + next_process.get(i).pid + "]");
 
       while (!next_process.isEmpty() || !next_pages.isEmpty() || !finished_process.isEmpty()) {
          int tmin = -1;
@@ -116,20 +288,47 @@ public class EP3 {
          while (tmin != -1 && tmin < time + interval) {
             if (event[1] == 1) {
                Process proc_next = next_process.removeFirst();
-               // Aloca espaço livre pra ele
-               while (!proc_next.pages.isEmpty())
-                  next_pages.add(proc_next.pages.removeFirst());
+               
+               proc_next.first_page = alloc_memory (proc_next);
+
+               while (!proc_next.pages.isEmpty()) {
+                  Page new_page = proc_next.pages.removeFirst();
+                  new_page.page = proc_next.first_page + new_page.page;
+
+                  next_pages.add(new_page);
+               }
+
+               finished_process.add(proc_next);
+               // Ordena next_pages
+               // Ordena proc_next
             }
             else if (event[1] == 2) {
                Page p = next_pages.removeFirst();
-               // Acessa a pagina
-
+               System.out.println (tmin + ": acessando pagina " + p.page);
+               if (table_pages[p.page][3] != 1) {
+                  System.out.println ("Page Fault");
+                  //page_fault (p);
+               }
             }
-            else if (event[1] == 3) // Remove o espaco que ele ocupou;
-            
+            else if (event[1] == 3) {
+               Process proc_end = finished_process.removeFirst();
+               System.out.println (tmin + ": terminando execucao do " + proc_end.name);
+
+               for (int i = proc_end.first_page; table_pages[i][0] == proc_end.pid; i++)
+                  table_pages[i][0] = -1;
+
+               int first_allocUnit = (proc_end.first_page * page_size) / allocUnit_size;
+               int last_allocUnit  = (int) Math.ceil( (double) proc_end.b / allocUnit_size); 
+
+               for (int i = first_allocUnit; i - first_allocUnit < last_allocUnit; i++) {
+                  System.out.println (virtual_memory_bm.get(i) + " " + i);
+                  virtual_memory_bm.clear(i);
+               }
+
+               print_virtualPage();
+            }
             event = select_event (-1);
             tmin = event[0];
-            System.out.println (tmin + " " + time + " " + interval);
          }
          time += interval;
       }
