@@ -6,6 +6,7 @@ public class Process {
    int tf;
    int b;
    int first_page;
+   boolean active;
    String name;
    LinkedList<Page> pages;
 
@@ -16,5 +17,6 @@ public class Process {
       this.b     = b;
       this.name  = name;
       this.pages = pages;
+      this.active = false;
    }
 }
