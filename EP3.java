@@ -494,7 +494,7 @@ public class EP3 {
       //Define o algoritmo de paginação
       else if (s[0].equals("substitui")) {
          alg_pages = Integer.parseInt(s[1]);
-         System.out.println ("console: algoritmo de paginação numero " + alg_space + " selecionado!");
+         System.out.println ("console: algoritmo de paginação numero " + alg_pages + " selecionado!");
          //sim.set_pageManagement(s[1]);
       }
       //Intervalo de tempo
