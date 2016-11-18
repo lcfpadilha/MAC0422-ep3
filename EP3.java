@@ -420,12 +420,6 @@ public class EP3 {
                   int page_frame = alloc_realMemory(p);
                
                   if (page_frame == -1) {
-                     System.out.println ("--------------------------");
-                     for (Page pagina : present_pages)
-                        System.out.println (pagina.page + " " + pagina.proc_pid);
-                     System.out.println (clock_index);
-
-                     System.out.println ("--------------------------");
                      int  removed_page = page_fault (p);
 
                      // Colocamos o p_id do processo no page_frame da página antiga
@@ -477,9 +471,10 @@ public class EP3 {
          }
 
          // Envelhecemos as páginas que estão presentes
-         for (Page p : present_pages)
-            if (time < pages_table[p.page].aging_time && pages_table[p.page].aging_time <= interval)
-               pages_table[p.page].r = false;
+         if (alg_pages == 2 || alg_pages == 3) 
+            for (Page p : present_pages)
+               if (time < pages_table[p.page].aging_time && pages_table[p.page].aging_time <= interval)
+                  pages_table[p.page].r = false;
          time += interval;
       }
    }
