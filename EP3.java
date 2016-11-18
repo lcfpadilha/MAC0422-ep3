@@ -82,7 +82,7 @@ public class EP3 {
             // Leitura dos dados do processo
             s = new Scanner(line);
             int      t0 = s.nextInt();
-            String name = s.next(); //TODO: Ajustar o nome
+            String name = s.next();
             int      tf = s.nextInt();
             int       b = s.nextInt();
 
@@ -273,6 +273,7 @@ public class EP3 {
    }
 
    public static int page_fault (Page p) {
+
       int page = 0;
       // Optimal
       if (alg_pages == 1) {
@@ -317,11 +318,20 @@ public class EP3 {
             clock_index = (clock_index + 1) % present_pages.size();
          }  
       }
-      /*
+      
       // LRU
       else if (alg_pages == 4) {
 
-      }*/
+         //vamos procurar a página com menor contador
+         Page lesser = present_pages.get(0);
+         for(Page pg : present_pages) {
+            if(pages_table[pg.page].lru_counter < pages_table[lesser.page].lru_counter)
+               lesser = pg;
+         }
+
+         present_pages.remove(lesser);
+         page = lesser.page;
+      }
 
       return page;
    }
@@ -366,7 +376,7 @@ public class EP3 {
       for (int i = 0; i < next_process.size(); i++)
          System.out.println ("[" + next_process.get(i).name + "]\t[" + next_process.get(i).pid + "]");
 
-      if (alg_pages == 2 || alg_pages == 3) 
+      if (alg_pages != 1) 
          present_pages = new LinkedList<Page>();
 
       while (!next_process.isEmpty() || !next_pages.isEmpty() || !finished_process.isEmpty()) {
@@ -432,11 +442,12 @@ public class EP3 {
 
                   // Registramos o uso do quadro de página page_frame
                   // para a página p
-                  pages_table[p.page].page_frame = page_frame;
-                  pages_table[p.page].presence   = true;
-                  pages_table[p.page].r          = true;
+                  pages_table[p.page].page_frame  = page_frame;
+                  pages_table[p.page].presence    = true;
+                  pages_table[p.page].r           = true;
+                  pages_table[p.page].lru_counter = 0; //zeramos o contador do LRU
 
-                  if (alg_pages == 2 || alg_pages == 3)
+                  if (alg_pages != 1)
                      present_pages.add(p);
 
                   print_realPage();
@@ -475,6 +486,19 @@ public class EP3 {
             for (Page p : present_pages)
                if (time < pages_table[p.page].aging_time && pages_table[p.page].aging_time <= interval)
                   pages_table[p.page].r = false;
+
+         //atualizamos os contadores do LRU
+         if(alg_pages == 4) {
+            for(Page p : present_pages) {
+
+               //flipamos o bit mais alto do nosso contador
+               if(pages_table[p.page].r)
+                  pages_table[p.page].lru_counter += 128;
+
+               //shiftamos todo mundo por 1 bit
+               pages_table[p.page].lru_counter >>>= 1;
+            }
+         }
          time += interval;
       }
    }

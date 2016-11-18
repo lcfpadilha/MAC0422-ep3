@@ -7,6 +7,7 @@ public class PageTable {
     int aging_time;
     boolean presence;
     boolean r;
+    int lru_counter; //contador de 8 bits
 
 
    public PageTable () {
@@ -15,5 +16,6 @@ public class PageTable {
     this.presence = false;
     this.r = false;
     this.label = 0;
+    this.lru_counter = 0;
    }
 }
