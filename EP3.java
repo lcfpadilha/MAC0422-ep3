@@ -388,7 +388,7 @@ public class EP3 {
                proc_next.active = true;
                while (!proc_next.pages.isEmpty()) {
                   Page new_page = proc_next.pages.removeFirst();
-                  new_page.page = proc_next.first_page + new_page.page;
+                  new_page.page = proc_next.first_page + new_page.page/page_size;
 
                   next_pages.add(new_page);
                }
@@ -519,7 +519,7 @@ public class EP3 {
 
       // Inicio do prompt
       while (true) {
-         System.out.print("(ep2): ");
+         System.out.print("(ep3): ");
          if (!in.hasNextLine()) break;
          
          // Lemos os argumentos da linha
