@@ -90,7 +90,7 @@ public class EP3 {
             LinkedList<Page> p_pages = new LinkedList<Page>();
 
             while (s.hasNextInt()) {
-               int p = s.nextInt();
+               int p = s.nextInt() / page_size;
                int t = s.nextInt();
 
                p_pages.add(new Page(p, t, k));
@@ -497,13 +497,9 @@ public class EP3 {
          System.out.println ("console: algoritmo de paginação numero " + alg_pages + " selecionado!");
          //sim.set_pageManagement(s[1]);
       }
-      //Intervalo de tempo
-      else if (s[0].equals("intervalo")) {
-         interval = Double.parseDouble(s[1]);
-         System.out.println ("console: intervalo selecionado!");
-      }
-      //Inicia simulador
+      //Inicia simulador com intervalo
       else if (s[0].equals("executa")) {
+         interval = Double.parseDouble(s[1]);
          System.out.println ("console: executando o simulador!");
          init_simulator();
          //sim.init();
