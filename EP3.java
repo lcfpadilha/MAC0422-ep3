@@ -421,7 +421,7 @@ public class EP3 {
                
                   if (page_frame == -1) {
                      int  removed_page = page_fault (p);
-
+                     
                      // Colocamos o p_id do processo no page_frame da página antiga
                      real_memory[pages_table[removed_page].page_frame] = p.proc_pid;
 
