@@ -1,7 +1,7 @@
 import java.util.*;
-import java.io.File;
-import java.io.FileNotFoundException;
+import java.io.*;
 
+// Comparador de processos
 class ProcessComparator implements Comparator<Process> {
    @Override
    public int compare(Process p1, Process p2) {
@@ -20,6 +20,7 @@ class ProcessComparator implements Comparator<Process> {
    }
 }
 
+// Comparador de páginas
 class PageComparator implements Comparator<Page> {
    @Override
    public int compare(Page p1, Page p2) {
@@ -41,6 +42,7 @@ public class EP3 {
    static LinkedList<Process> finished_process; //processos que estão em execução
    static LinkedList<Page>    next_pages;       //próximas páginas a serem acessadas 
    static LinkedList<Page>    present_pages;    //listas de páginas que estão na memória física 
+   static LinkedList<Long>  total_time;      
    static int alg_space, alg_pages;                     
    static int virtual_size, real_size, allocUnit_size, page_size;
    static int next_fit_index, clock_index;
@@ -122,7 +124,7 @@ public class EP3 {
    public static void print_virtualPage () {
       System.out.println ("ESTADO DA MEMORIA VIRTUAL:");
       for (int i = 0; i < pages_table.length; i++) {
-         System.out.print (pages_table[i].proc_pid/* + "(" + pages_table[i].page_frame+", " + pages_table[i].presence + ", " + pages_table[i].label + ")"*/+ " ");
+         System.out.print (pages_table[i].proc_pid + " ");
       }
       System.out.println ();
    }
@@ -137,6 +139,61 @@ public class EP3 {
       System.out.println ();
    }
 
+   // print_bitmap: imprime o estado do bitmap
+   public static void print_bitmap() {
+      System.out.println ("BITMAP DA MEMORIA VIRTUAL:");
+      for (int i = 0; i < virtual_memory_bm.size(); i++)
+         System.out.print (virtual_memory_bm.get(i) + " ");
+      System.out.println ();
+   }
+
+   // print_virtual_memory: altera o arquivo /tmp/ep3.vir com a nova
+   //memoria.
+   public static void print_virtual_memory() throws IOException {
+      String data = "";
+      for (PageTable pt : pages_table) 
+         for (int i = 0; i < page_size; i++)
+            data = data + String.format("%16s", Integer.toBinaryString(pt.proc_pid)).replace(' ', '0');
+
+
+      File file = new File("tmp/ep3.vir");
+      
+      // creates the file
+      file.getParentFile().mkdirs();
+      file.createNewFile();
+
+      // creates a FileWriter Object
+      FileWriter writer = new FileWriter(file); 
+      
+      // Writes the content to the file
+      writer.write(data); 
+      writer.flush();
+      writer.close();
+   }
+
+   // print_virtual_memory: altera o arquivo /tmp/ep3.vir com a nova
+   //memoria.
+   public static void print_real_memory() throws IOException {
+      String data = "";
+      for (int i = 0; i < real_memory.length; i++) 
+         for (int j = 0; j < page_size; j++)
+            data = data + String.format("%16s", Integer.toBinaryString(real_memory[i])).replace(' ', '0');
+
+
+      File file = new File("tmp/ep3.mem");
+      
+      // creates the file
+      file.getParentFile().mkdirs();
+      file.createNewFile();
+
+      // creates a FileWriter Object
+      FileWriter writer = new FileWriter(file); 
+      
+      // Writes the content to the file
+      writer.write(data); 
+      writer.flush();
+      writer.close();
+   }
    // alloc_memory: recebe um Process proc e aloca espaço na
    //memória virtual para ele utilizando um dos algoritmos
    //de gerência de espaço livre
@@ -183,10 +240,8 @@ public class EP3 {
                if (k - index == alloc_size) break;
             }
          }
-         System.out.println("olha aqui: " + i + " " + max_units);
          i = i % max_units;
-         System.out.println("oha depois aqui:" + i);
-
+         
          // Existem k e i
          for (int j = i; j < k; j++)
             virtual_memory_bm.set(j);
@@ -194,7 +249,7 @@ public class EP3 {
          // Habilitando tabela de paginas
          page_ini = i * allocUnit_size / page_size;
          page_end = k * allocUnit_size / page_size;
-         System.out.println("From " + page_ini + " to " + page_end + "(" + pages_table.length + ")");
+
          for (int j = page_ini; j < pages_table.length && j < page_end; j++) {
             pages_table[j].proc_pid = proc.pid;
             pages_table[j].presence = false;
@@ -273,8 +328,6 @@ public class EP3 {
             pages_table[j].r = false;
          }
       }
-
-      print_virtualPage();
 
       return page_ini;
    }
@@ -361,7 +414,9 @@ public class EP3 {
       return page;
    }
 
-   // select
+   // select_event: recebe um inteiro tmin e escolhe
+   //o menor tempo entre as 3 filas de próximos 
+   //eventos
    public static int[] select_event (int tmin) {
       int[] event = new int[2];
 
@@ -391,14 +446,15 @@ public class EP3 {
       return event;
    }
 
-   public static void init_simulator () {
+   // init_simulator: inicia a simulação da gerencia de memoria
+   public static void init_simulator () throws IOException {
       int time = 0;
       int fault_count = 0;
       int max = 0;
 
       if (alg_space == 2) next_fit_index = 0;
       if (alg_pages == 3) clock_index = 0;
-      
+      total_time = new LinkedList<Long>();
       System.out.println ("[Processo]\t[PID]");
 
       for (int i = 0; i < next_process.size(); i++)
@@ -406,6 +462,9 @@ public class EP3 {
 
       if (alg_pages != 1) 
          present_pages = new LinkedList<Page>();
+
+      //print_virtual_memory();
+      //print_real_memory();
 
       while (!next_process.isEmpty() || !next_pages.isEmpty() || !finished_process.isEmpty()) {
          int tmin = -1;
@@ -418,19 +477,20 @@ public class EP3 {
          while (tmin != -1 && tmin < time + interval) {
             // Evento 1 -> Processo entrando no sistema
             if (event[1] == 1) {
-
+               Chronometer ch = new Chronometer ();
                Process proc_next = next_process.removeFirst();
+               ch.start();
                proc_next.first_page = alloc_memory (proc_next);
+               ch.stop();
+               total_time.add(ch.getTime());
                proc_next.active = true;
 
-               //System.out.println (tmin + ": inserindo processo " + proc_next.name + " -> " + proc_next.first_page);
                while (!proc_next.pages.isEmpty()) {
                   Page new_page = proc_next.pages.removeFirst();
                   new_page.page = proc_next.first_page + new_page.page/page_size;
-
                   next_pages.add(new_page);
                }
-               //System.out.println (proc_next.first_page + " " + next_pages.size());
+
                finished_process.add(proc_next);
                Collections.sort(next_process, new ProcessComparator());
                Collections.sort(finished_process, new ProcessComparator());
@@ -449,11 +509,12 @@ public class EP3 {
                      i++;
                   }
                }
+               // Imprimimos a nova configuração da página virtual
+               //print_virtual_memory();
             }
             // Evento 2 -> Pagina querendo ser acessada
             else if (event[1] == 2) {
                Page p = next_pages.removeFirst();
-               //System.out.println (tmin + ": acessando pagina " + p.page + " do processo " + p.proc_pid);
                
                if (!pages_table[p.page].presence) {
                   int page_frame = alloc_realMemory(p);
@@ -476,11 +537,12 @@ public class EP3 {
                   pages_table[p.page].r           = true;
                   pages_table[p.page].lru_counter = 0; //zeramos o contador do LRU
 
+                  // Imprimimos a nova configuração da memória real
+
+                  //print_real_memory();
+
                   if (alg_pages != 1)
                      present_pages.add(p);
-
-                  //print_realPage();
-                  //print_virtualPage();
                }
                else 
                   pages_table[p.page].r = true;
@@ -492,7 +554,6 @@ public class EP3 {
             // Evento 3 -> Processo saindo do sistema
             else if (event[1] == 3) {
                Process proc_end = finished_process.removeFirst();
-               //System.out.println (tmin + ": terminando execucao do " + proc_end.name);
 
                // Limpando memória virtual
                for (int i = proc_end.first_page; i < pages_table.length && pages_table[i].proc_pid == proc_end.pid; i++) {
@@ -507,7 +568,8 @@ public class EP3 {
                for (int i = first_allocUnit; i - first_allocUnit < last_allocUnit; i++) 
                   virtual_memory_bm.clear(i);
 
-               //print_virtualPage();
+               // Imprimimos a nova configuração da memória virtual
+               //print_virtual_memory();
             }
             
             int count = 0;
@@ -525,29 +587,41 @@ public class EP3 {
                if (time < pages_table[p.page].aging_time && pages_table[p.page].aging_time <= interval)
                   pages_table[p.page].r = false;
 
-         //atualizamos os contadores do LRU
+         // Atualizamos os contadores do LRU
          if(alg_pages == 4) {
             for(Page p : present_pages) {
 
-               //flipamos o bit mais alto do nosso contador
+               // Flipamos o bit mais alto do nosso contador
                if(pages_table[p.page].r)
                   pages_table[p.page].lru_counter += 128;
 
-               //shiftamos todo mundo por 1 bit
+               // Shiftamos todo mundo por 1 bit
                pages_table[p.page].lru_counter >>>= 1;
             }
          }
-         print_realPage();
+         // Imprimimos o estado de cada uma das memórias
+         System.out.println("TEMPO: " + (time + interval));
+         System.out.println();
+         print_bitmap();
+         System.out.println();
          print_virtualPage();
-         
+         System.out.println();
+         print_realPage();
+         System.out.println(); 
          time += interval;
       }
+      long total = 0;
+      for (long d : total_time)
+         total += d;
+      double temp_gasto = (double) total / total_time.size();
       System.out.println("Page Faults: " + fault_count);
-      System.out.println("Counter: " + max);
+      System.out.println("Tempo médio gasto: " + temp_gasto);
    }
 
-   public static void execute_command (String[] s) {
-      //Carrega arquivo de trace no simulador
+   // execute_command: recebe um vetor de string s e 
+   //executa o respectivo comando
+   public static void execute_command (String[] s) throws IOException { 
+      //Carrega arquivo de trace no simulador 
       if (s[0].equals("carrega")) {
          set_traceFile(s[1]);
          System.out.println ("console: trace carregado!");
@@ -576,7 +650,7 @@ public class EP3 {
       }
    }
 
-   public static void main (String[] args) {
+   public static void main (String[] args) throws IOException {
       Scanner in = new Scanner(System.in);
       String[] com_args;
 
