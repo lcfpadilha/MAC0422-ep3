@@ -190,7 +190,7 @@ public class EP3 {
          // Habilitando tabela de paginas
          page_ini = i * allocUnit_size / page_size;
          page_end = k * allocUnit_size / page_size;
-         for (int j = page_ini; j < page_end; j++) {
+         for (int j = page_ini; j < pages_table.length && j < page_end; j++) {
             pages_table[j].proc_pid = proc.pid;
             pages_table[j].presence = false;
             pages_table[j].r = false;
@@ -229,7 +229,7 @@ public class EP3 {
          page_ini = ini * allocUnit_size / page_size;
          pages = alloc_size * allocUnit_size / page_size;
 
-         for (int j = page_ini; j - page_ini < pages; j++) {
+         for (int j = page_ini; j < pages_table.length && j - page_ini < pages; j++) {
             pages_table[j].proc_pid = proc.pid;
             pages_table[j].presence = false;
             pages_table[j].r = false;
@@ -255,7 +255,7 @@ public class EP3 {
          }
 
          // Existem k e i
-         for (int j = ini; j - ini < alloc_size; j++)
+         for (int j = ini; j < pages_table.length && j - ini < alloc_size; j++)
             virtual_memory_bm.set(j);
 
          // Habilitando tabela de paginas
@@ -388,6 +388,8 @@ public class EP3 {
 
    public static void init_simulator () {
       int time = 0;
+      int fault_count = 0;
+      int max = 0;
 
       if (alg_space == 2) next_fit_index = 0;
       if (alg_pages == 3) clock_index = 0;
@@ -416,14 +418,14 @@ public class EP3 {
                proc_next.first_page = alloc_memory (proc_next);
                proc_next.active = true;
 
-               System.out.println (tmin + ": inserindo processo " + proc_next.name + " -> " + proc_next.first_page);
+               //System.out.println (tmin + ": inserindo processo " + proc_next.name + " -> " + proc_next.first_page);
                while (!proc_next.pages.isEmpty()) {
                   Page new_page = proc_next.pages.removeFirst();
                   new_page.page = proc_next.first_page + new_page.page/page_size;
 
                   next_pages.add(new_page);
                }
-               System.out.println (next_pages.size());
+               //System.out.println (proc_next.first_page + " " + next_pages.size());
                finished_process.add(proc_next);
                Collections.sort(next_process, new ProcessComparator());
                Collections.sort(finished_process, new ProcessComparator());
@@ -446,14 +448,14 @@ public class EP3 {
             // Evento 2 -> Pagina querendo ser acessada
             else if (event[1] == 2) {
                Page p = next_pages.removeFirst();
-               System.out.println (tmin + ": acessando pagina " + p.page + " do processo " + p.proc_pid);
+               //System.out.println (tmin + ": acessando pagina " + p.page + " do processo " + p.proc_pid);
                
                if (!pages_table[p.page].presence) {
                   int page_frame = alloc_realMemory(p);
                
                   if (page_frame == -1) {
                      int  removed_page = page_fault (p);
-                     
+                     fault_count++;
                      // Colocamos o p_id do processo no page_frame da página antiga
                      real_memory[pages_table[removed_page].page_frame] = p.proc_pid;
 
@@ -472,8 +474,8 @@ public class EP3 {
                   if (alg_pages != 1)
                      present_pages.add(p);
 
-                  print_realPage();
-                  print_virtualPage();
+                  //print_realPage();
+                  //print_virtualPage();
                }
                else 
                   pages_table[p.page].r = true;
@@ -485,11 +487,14 @@ public class EP3 {
             // Evento 3 -> Processo saindo do sistema
             else if (event[1] == 3) {
                Process proc_end = finished_process.removeFirst();
-               System.out.println (tmin + ": terminando execucao do " + proc_end.name);
+               //System.out.println (tmin + ": terminando execucao do " + proc_end.name);
 
                // Limpando memória virtual
-               for (int i = proc_end.first_page; pages_table[i].proc_pid == proc_end.pid; i++)
+               for (int i = proc_end.first_page; i < pages_table.length && pages_table[i].proc_pid == proc_end.pid; i++) {
                   pages_table[i].proc_pid = -1;
+                  if (pages_table[i].presence)
+                     real_memory[pages_table[i].page_frame] = -1;
+               }
 
                int first_allocUnit = (proc_end.first_page * page_size) / allocUnit_size;
                int last_allocUnit  = (int) Math.ceil( (double) proc_end.b / allocUnit_size); 
@@ -497,8 +502,14 @@ public class EP3 {
                for (int i = first_allocUnit; i - first_allocUnit < last_allocUnit; i++) 
                   virtual_memory_bm.clear(i);
 
-               print_virtualPage();
+               //print_virtualPage();
             }
+            
+            int count = 0;
+            for (int i = 0; i < pages_table.length; i++)
+               if (pages_table[i].proc_pid != -1) count++;
+            if (count > max) max = count;
+
             event = select_event (-1);
             tmin = event[0];
          }
@@ -521,8 +532,13 @@ public class EP3 {
                pages_table[p.page].lru_counter >>>= 1;
             }
          }
+         print_realPage();
+         print_virtualPage();
+         
          time += interval;
       }
+      System.out.println("Page Faults: " + fault_count);
+      System.out.println("Counter: " + max);
    }
 
    public static void execute_command (String[] s) {
