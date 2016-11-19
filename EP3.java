@@ -25,8 +25,10 @@ class PageComparator implements Comparator<Page> {
    public int compare(Page p1, Page p2) {
       if (p1.t_access > p2.t_access)
          return 1;
-      else
+      else if (p1.t_access < p2.t_access)
          return -1;
+      else
+         return 0;
    }
 }
 
@@ -44,6 +46,8 @@ public class EP3 {
    static int next_fit_index, clock_index;
    static double interval;
 
+   // set_traceFile: recebe o nome de um arquivo f_name, abre-o e
+   //incializa todas as variáveis para o início do simulador
    public static void set_traceFile (String f_name) {
       int k = 0;
 
@@ -82,7 +86,7 @@ public class EP3 {
             // Leitura dos dados do processo
             s = new Scanner(line);
             int      t0 = s.nextInt();
-            String name = s.next(); //TODO: Ajustar o nome
+            String name = s.next();
             int      tf = s.nextInt();
             int       b = s.nextInt();
 
@@ -90,7 +94,7 @@ public class EP3 {
             LinkedList<Page> p_pages = new LinkedList<Page>();
 
             while (s.hasNextInt()) {
-               int p = s.nextInt();
+               int p = s.nextInt() / page_size;
                int t = s.nextInt();
 
                p_pages.add(new Page(p, t, k));
@@ -105,12 +109,16 @@ public class EP3 {
          for (int i = 0; i < real_memory.length; i++)
             real_memory[i] = -1;
 
+         Collections.sort(next_process, new ProcessComparator());
+
       // Se houve erro
       } catch (FileNotFoundException fnfe) {
         System.out.println("ERRO:" + fnfe);
       }
    } 
 
+   // print_virtualPage: imprime o estado da memória virtual (PID de 
+   //cada processo por página) na saída padrão
    public static void print_virtualPage () {
       System.out.println ("ESTADO DA MEMORIA VIRTUAL:");
       for (int i = 0; i < pages_table.length; i++) {
@@ -119,6 +127,8 @@ public class EP3 {
       System.out.println ();
    }
 
+   // print_realPage: imprime o estado da memória real (PID de 
+   //cada processo por página) na saída padrão
    public static void print_realPage() {
       System.out.println ("ESTADO DA MEMORIA REAL:");
       for (int i = 0; i < real_memory.length; i++)
@@ -127,6 +137,9 @@ public class EP3 {
       System.out.println ();
    }
 
+   // alloc_memory: recebe um Process proc e aloca espaço na
+   //memória virtual para ele utilizando um dos algoritmos
+   //de gerência de espaço livre
    public static int alloc_memory (Process proc) {
       int i, alloc_size, max_units, k, pages, page_ini = 0, page_end = 0;
       max_units = virtual_memory_bm.size();
@@ -135,7 +148,6 @@ public class EP3 {
 
       // Alocando por First Fit
       if (alg_space == 1) {
-
          for (i = 0; i < max_units - alloc_size; i++) {
             if (!virtual_memory_bm.get(i)) {
                k = i + 1;
@@ -152,7 +164,8 @@ public class EP3 {
          // Habilitando tabela de páginas
          page_ini = i * allocUnit_size / page_size;
          page_end = k * allocUnit_size / page_size;
-         for (int j = page_ini; j < page_end; j++) {
+
+         for (int j = page_ini; j < pages_table.length && j < page_end; j++) {
             pages_table[j].proc_pid = proc.pid; // Identificador do processo que está ocupando essa posição
             pages_table[j].presence = false;    // Bit de ausente/presente
             pages_table[j].r = false;           // Bit R
@@ -261,6 +274,9 @@ public class EP3 {
       return page_ini;
    }
 
+   // alloc_realMemory: recebe uma página p e aloca espaço na
+   //memória real para essa página (retorna -1 se não houve
+   //possibilidade de alocação)
    public static int alloc_realMemory (Page p) {
       int size = real_memory.length;
       for (int i = 0; i < size; i++) {
@@ -272,7 +288,12 @@ public class EP3 {
       return -1;
    }
 
+   // page_fault: recebe uma Page p, retira alguma página
+   //que está na memória real e substitui pela página p.
+   //A escolha da página a ser retirada é através de um 
+   //dos algoritmos de substituição de página. 
    public static int page_fault (Page p) {
+
       int page = 0;
       // Optimal
       if (alg_pages == 1) {
@@ -317,15 +338,25 @@ public class EP3 {
             clock_index = (clock_index + 1) % present_pages.size();
          }  
       }
-      /*
+      
       // LRU
       else if (alg_pages == 4) {
 
-      }*/
+         //vamos procurar a página com menor contador
+         Page lesser = present_pages.get(0);
+         for(Page pg : present_pages) {
+            if(pages_table[pg.page].lru_counter < pages_table[lesser.page].lru_counter)
+               lesser = pg;
+         }
+
+         present_pages.remove(lesser);
+         page = lesser.page;
+      }
 
       return page;
    }
 
+   // select
    public static int[] select_event (int tmin) {
       int[] event = new int[2];
 
@@ -366,7 +397,7 @@ public class EP3 {
       for (int i = 0; i < next_process.size(); i++)
          System.out.println ("[" + next_process.get(i).name + "]\t[" + next_process.get(i).pid + "]");
 
-      if (alg_pages == 2 || alg_pages == 3) 
+      if (alg_pages != 1) 
          present_pages = new LinkedList<Page>();
 
       while (!next_process.isEmpty() || !next_pages.isEmpty() || !finished_process.isEmpty()) {
@@ -382,18 +413,19 @@ public class EP3 {
             if (event[1] == 1) {
 
                Process proc_next = next_process.removeFirst();
-               System.out.println (tmin + ": inserindo processo " + proc_next.name);
-               
                proc_next.first_page = alloc_memory (proc_next);
                proc_next.active = true;
+
+               System.out.println (tmin + ": inserindo processo " + proc_next.name + " -> " + proc_next.first_page);
                while (!proc_next.pages.isEmpty()) {
                   Page new_page = proc_next.pages.removeFirst();
                   new_page.page = proc_next.first_page + new_page.page/page_size;
 
                   next_pages.add(new_page);
                }
-
+               System.out.println (next_pages.size());
                finished_process.add(proc_next);
+               Collections.sort(next_process, new ProcessComparator());
                Collections.sort(finished_process, new ProcessComparator());
                Collections.sort(next_pages, new PageComparator());
 
@@ -432,11 +464,12 @@ public class EP3 {
 
                   // Registramos o uso do quadro de página page_frame
                   // para a página p
-                  pages_table[p.page].page_frame = page_frame;
-                  pages_table[p.page].presence   = true;
-                  pages_table[p.page].r          = true;
+                  pages_table[p.page].page_frame  = page_frame;
+                  pages_table[p.page].presence    = true;
+                  pages_table[p.page].r           = true;
+                  pages_table[p.page].lru_counter = 0; //zeramos o contador do LRU
 
-                  if (alg_pages == 2 || alg_pages == 3)
+                  if (alg_pages != 1)
                      present_pages.add(p);
 
                   print_realPage();
@@ -475,6 +508,19 @@ public class EP3 {
             for (Page p : present_pages)
                if (time < pages_table[p.page].aging_time && pages_table[p.page].aging_time <= interval)
                   pages_table[p.page].r = false;
+
+         //atualizamos os contadores do LRU
+         if(alg_pages == 4) {
+            for(Page p : present_pages) {
+
+               //flipamos o bit mais alto do nosso contador
+               if(pages_table[p.page].r)
+                  pages_table[p.page].lru_counter += 128;
+
+               //shiftamos todo mundo por 1 bit
+               pages_table[p.page].lru_counter >>>= 1;
+            }
+         }
          time += interval;
       }
    }
@@ -497,13 +543,9 @@ public class EP3 {
          System.out.println ("console: algoritmo de paginação numero " + alg_pages + " selecionado!");
          //sim.set_pageManagement(s[1]);
       }
-      //Intervalo de tempo
-      else if (s[0].equals("intervalo")) {
-         interval = Double.parseDouble(s[1]);
-         System.out.println ("console: intervalo selecionado!");
-      }
-      //Inicia simulador
+      //Inicia simulador com intervalo
       else if (s[0].equals("executa")) {
+         interval = Double.parseDouble(s[1]);
          System.out.println ("console: executando o simulador!");
          init_simulator();
          //sim.init();
