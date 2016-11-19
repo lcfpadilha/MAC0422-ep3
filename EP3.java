@@ -142,7 +142,7 @@ public class EP3 {
    //de gerência de espaço livre
    public static int alloc_memory (Process proc) {
       int i, alloc_size, max_units, k, pages, page_ini = 0, page_end = 0;
-      max_units = virtual_memory_bm.size();
+      max_units = virtual_size / allocUnit_size;
       alloc_size = (int) Math.ceil( (double) proc.b/allocUnit_size); 
       k = max_units - alloc_size;
 
@@ -175,13 +175,17 @@ public class EP3 {
       else if (alg_space == 2) {
 
          for (i = next_fit_index; i - next_fit_index < max_units; i++) {
-            if (!virtual_memory_bm.get(i)) {
-               k = i + 1;
-               while (k - i < alloc_size && k < max_units && !virtual_memory_bm.get(k))
+            int index = i % max_units;
+            if (!virtual_memory_bm.get(index)) {
+               k = index + 1;
+               while (k - index < alloc_size && k < max_units && !virtual_memory_bm.get(k))
                   k++;
-               if (k - i == alloc_size) break;
+               if (k - index == alloc_size) break;
             }
          }
+         System.out.println("olha aqui: " + i + " " + max_units);
+         i = i % max_units;
+         System.out.println("oha depois aqui:" + i);
 
          // Existem k e i
          for (int j = i; j < k; j++)
@@ -190,6 +194,7 @@ public class EP3 {
          // Habilitando tabela de paginas
          page_ini = i * allocUnit_size / page_size;
          page_end = k * allocUnit_size / page_size;
+         System.out.println("From " + page_ini + " to " + page_end + "(" + pages_table.length + ")");
          for (int j = page_ini; j < pages_table.length && j < page_end; j++) {
             pages_table[j].proc_pid = proc.pid;
             pages_table[j].presence = false;
